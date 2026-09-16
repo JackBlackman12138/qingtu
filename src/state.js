@@ -1,0 +1,5 @@
+import {CONFIG} from './config.js';
+export const SAVE_KEY='dream-expo-v12-final';
+export function initialState(now=Date.now()) {return {schema:1,created:now,lastRegen:now,clockOffset:0,map:0,branch:null,started:false,inside:true,ended:false,online:true,energy:CONFIG.initialEnergy,tickets:0,free:0,duplicate:0,coins:0,diamonds:100,mainEnergy:0,speed:0,generator:0,spent:0,stages:{},completed:{},story:[],horses:[],installed:[],repairs:[],mementos:[],materials:{},ingredients:false,prepared:{},dialog:null,pendingBatch:null,toys:[],newToys:[],sequence:0,paidDraws:0,claims:[],orders:[],exchanges:{},events:[],settings:{reduced:false,sound:false},review:{orderEnergy:CONFIG.orderEnergy,energyConversion:null},settlement:null};}
+export function loadState(storage=globalThis.localStorage){try{const s=JSON.parse(storage.getItem(SAVE_KEY));if(s?.schema===1&&Array.isArray(s.story)&&Array.isArray(s.toys))return s;}catch{}return initialState();}
+export function saveState(s,storage=globalThis.localStorage){storage.setItem(SAVE_KEY,JSON.stringify(s));}
