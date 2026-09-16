@@ -1,5 +1,7 @@
 // V1.2 §§9,12. All unconfirmed values are review configuration, not production economy.
 export const CONFIG = { days:13, initialEnergy:150, cap:150, regenMs:360000, ticketCost:1, duplicateThreshold:20, multipliers:[1,5,10], orderEnergy:80, exchange:{diamonds:30,energy:100,limit:5}, energyConversion:null, version:'review-v1.2-demo-1' };
+export const ENERGY_OFFERS=[{id:'small',energy:40,diamonds:12},{id:'large',energy:100,diamonds:30}];
+CONFIG.version='review-v1.3-demo-2';
 export const ZONES = [
  {name:'中央广场',en:'THE DREAM EXPO',short:'广场',horse:'',colors:['#b7d8c8','#eef4d4','#6cad97'],budget:50,side:0,ops:8,chest:30,icon:'carousel'},
  {name:'甜点花园',en:'SUGAR & WONDER',short:'甜点',horse:'糖霜木马',colors:['#bfdfb6','#f1edc4','#84b896'],budget:700,side:100,ops:54,chest:100,icon:'cake',memo:['小围裙','茶杯'],material:['烤炉零件','烤炉把手'],repair:'烤炉',memory:'旧食谱',ending:'原来，我已经实现过一个小时候的愿望。'},
@@ -50,6 +52,9 @@ function createMap(z,zi){
 export const MAPS=ZONES.map(createMap);
 export const allNodes=()=>MAPS.flatMap(m=>[...m.nodes,...m.branches.flat()]);
 export const NODE_BY_ID=Object.fromEntries(allNodes().map(n=>[n.id,n]));
+// Logical path order remains stable for existing saves. Display coordinates run upward.
+export function mapHeight(map,branch=null){return branch===null?(map===0?1930:MAPS[map].height):Math.max(900,MAPS[map].branches[branch].at(-1).y+270);}
+export function sceneY(node,map=node.map,branch=node.branch??null){if(node.p===17)return 790;return mapHeight(map,branch)-node.y;}
 // Review sequence: 25 first discoveries distributed over 120 items, last first at 120.
 export const FIRST_POSITIONS=[1,3,6,9,12,16,20,24,28,32,37,42,47,52,57,63,69,75,81,87,94,101,108,114,120];
 export const SEQUENCE=Array.from({length:120},(_,i)=>{const pos=i+1; const first=FIRST_POSITIONS.indexOf(pos);if(first>=0)return {type:'toy',id:first};if(pos%4===0)return {type:'energy',amount:40};if(pos%7===0)return {type:'coins',amount:30};if(pos%13===0)return {type:'speed',amount:1};return {type:'toy',id:(pos*7)%Math.max(1,FIRST_POSITIONS.filter(p=>p<pos).length)};});

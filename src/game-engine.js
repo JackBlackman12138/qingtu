@@ -1,10 +1,11 @@
-import {CONFIG,MAPS,NODE_BY_ID,ZONES,TOYS,SEQUENCE,TAIL,TASKS,STORY_REWARD,COLLECTION_REWARD,CATEGORY_REWARD} from './config.js';
+import {CONFIG,ENERGY_OFFERS,MAPS,NODE_BY_ID,ZONES,TOYS,SEQUENCE,TAIL,TASKS,STORY_REWARD,COLLECTION_REWARD,CATEGORY_REWARD} from './config.js';
 export const nowOf=(s,now=Date.now())=>now+s.clockOffset;
 export const expired=(s,now=Date.now())=>nowOf(s,now)>=s.created+CONFIG.days*86400000;
 export function tick(s,now=Date.now()){const t=Math.min(nowOf(s,now),s.created+CONFIG.days*86400000);if(!s.online||s.ended)return;if(s.energy>=CONFIG.cap){s.lastRegen=t;return;} const n=Math.floor(Math.max(0,t-s.lastRegen)/CONFIG.regenMs);if(n){s.energy=Math.min(CONFIG.cap,s.energy+n);s.lastRegen+=n*CONFIG.regenMs;if(s.energy===CONFIG.cap)s.lastRegen=t;}}
 export const done=(s,id)=>!!s.completed[id];
 export const unlocked=(s,map)=>map===0||(s.story.includes(1)&&(map===1||s.installed.includes(map-1)));
 export const accessible=(s,n)=>n.type==='chest'?s.story.includes(n.p):(!n.prev||done(s,n.prev));
+export function collectionTarget(s,id){let n=NODE_BY_ID[id];if(!n)return null;while(n.prev&&!done(s,n.prev)){n=NODE_BY_ID[n.prev];if(!n)return null;}return n;}
 export function currentNode(s){const list=s.branch===null?MAPS[s.map].nodes:MAPS[s.map].branches[s.branch];return list?.find(n=>n.type!=='chest'&&!done(s,n.id)&&accessible(s,n));}
 const fail=message=>({ok:false,message});
 function log(s,type,detail={}){s.events.push({at:nowOf(s),type,...detail});if(s.events.length>500)s.events.shift();}
@@ -12,8 +13,10 @@ function reward(s,r){for(const [k,v] of Object.entries(r))s[k]+=v;}
 export const taskCount=(s,id)=>s[id].length;
 export function rewardFor(s,id){if(id==='story')return {ready:s.story.length===17,reward:STORY_REWARD};if(id==='collection')return {ready:s.toys.length===25,reward:COLLECTION_REWARD};if(id.startsWith('quality-')){const q=Number(id.slice(8));return {ready:TOYS.filter(t=>t.q===q).every(t=>s.toys.includes(t.id)),reward:CATEGORY_REWARD};}const t=TASKS.find(t=>t.id===id);return t?{ready:taskCount(s,id)>=t.total,reward:t.reward}:null;}
 function completeStory(s,n){if(s.story.includes(n.p))return;s.story.push(n.p);s.story.sort((a,b)=>a-b);s.completed[n.id]=true;s.tickets+=n.p===1?3:5;log(s,'story_complete',{p:n.p});}
+function awardHorse(s,n){if(!s.horses.includes(n.map))s.horses.push(n.map);completeStory(s,n);log(s,'horse_obtain',{map:n.map});return {ok:true,horse:true,message:`${ZONES[n.map].horse}已收入手册 · 可自行回广场安装`};}
+export function migrateHorse(s){for(const m of MAPS.slice(1)){const n=m.nodes.find(n=>n.type==='story'&&n.step===2);if(s.prepared[n.id]&&!s.completed[n.id])awardHorse(s,n);}}
 function setDialog(s,type,map,p,lines){s.dialog={type,map,p,index:0,lines};}
-export function advanceDialog(s,skip=false){if(!s.dialog)return fail('没有进行中的剧情');if(!s.online)return fail('网络暂不可用，连接后继续');const d=s.dialog;if(!skip&&d.index<d.lines.length-1){d.index++;return {ok:true};}s.dialog=null;const n=MAPS[d.map].nodes.find(n=>n.p===d.p&&n.type==='story');if(d.type==='complete')completeStory(s,n);if(d.type==='prepare')s.prepared[n.id]=true;if(d.type==='install'){if(!s.installed.includes(d.map))s.installed.push(d.map);log(s,'horse_install',{map:d.map});if(d.map===5)setDialog(s,'final',0,17,[['莉亚','是你邀请我回来的。'],['蒙奇','你小时候说过，长大了也要再来。'],['莉亚','我现在还有很多事情要忙。'],['蒙奇','那就偶尔，给喜欢的事情留一点时间。'],['莉亚','好。这次，我记住了。']]);}if(d.type==='final'){if(!s.story.includes(17)){s.story.push(17);s.tickets+=5;log(s,'story_complete',{p:17});}return {ok:true,finale:true};}return {ok:true,dialogFinished:true};}
+export function advanceDialog(s,skip=false){if(!s.dialog)return fail('没有进行中的剧情');if(!s.online)return fail('网络暂不可用，连接后继续');const d=s.dialog;if(!skip&&d.index<d.lines.length-1){d.index++;return {ok:true};}s.dialog=null;const n=MAPS[d.map].nodes.find(n=>n.p===d.p&&n.type==='story');if(d.type==='complete')completeStory(s,n);if(d.type==='horse'||d.type==='prepare'&&n?.step===2)return {...awardHorse(s,n),dialogFinished:true};if(d.type==='prepare')s.prepared[n.id]=true;if(d.type==='install'){if(!s.installed.includes(d.map))s.installed.push(d.map);log(s,'horse_install',{map:d.map});if(d.map===5)setDialog(s,'final',0,17,[['莉亚','是你邀请我回来的。'],['蒙奇','你小时候说过，长大了也要再来。'],['莉亚','我现在还有很多事情要忙。'],['蒙奇','那就偶尔，给喜欢的事情留一点时间。'],['莉亚','好。这次，我记住了。']]);}if(d.type==='final'){if(!s.story.includes(17)){s.story.push(17);s.tickets+=5;log(s,'story_complete',{p:17});}return {ok:true,finale:true};}return {ok:true,dialogFinished:true};}
 function startInstall(s){const h=s.horses.find(h=>!s.installed.includes(h));if(s.map===0&&h)setDialog(s,'install',h,null,[['蒙奇',`${ZONES[h].horse}终于回家了。看，它的位置一直在这里。`],['莉亚',h===5?'现在，大家都到齐了。':'我们再去接下一位老朋友吧。']]);}
 export function act(s,action,data={}){
  tick(s);if(action==='network'){s.online=data.online;return {ok:true};}
@@ -40,8 +43,8 @@ export function act(s,action,data={}){
    const z=ZONES[s.map];if(s.map===0){setDialog(s,'complete',0,1,[['莉亚','邀请券上的旋转木马，怎么是空的？'],['蒙奇','五匹木马还在门后的展区里。帮那些地方重新运转，它们就能回来。'],['莉亚','那就先去甜点花园看看。']]);return {ok:true};}
    if(n.step===0){setDialog(s,'complete',s.map,n.p,[['莉亚',`是小时候的${z.memory}！原来我一直记得这里。`],['蒙奇',`沿着这条路，把${z.repair}修好，也许就能找到木马。`]]);return {ok:true};}
    if(n.step===1){if(!s.prepared[n.id]){if(![0,1].every(i=>s.materials[`${s.map}-${i}`]))return fail('还缺少修复材料，请沿主路拾取');[0,1].forEach(i=>delete s.materials[`${s.map}-${i}`]);setDialog(s,'prepare',s.map,n.p,[['莉亚',`${z.material.join('和')}都找齐了。让${z.repair}重新运转吧！`],['蒙奇','听，它恢复了！别忘了收下这枚纪念标记。']]);return {ok:true};}s.repairs.push(s.map);completeStory(s,n);return {ok:true,message:`${z.repair}纪念标记已放入手册`};}
-   if(!s.prepared[n.id]){if(s.map===1&&!s.ingredients)return fail('先沿主路找齐甜点食材');if(s.map===1)s.ingredients=false;setDialog(s,'prepare',s.map,n.p,[[s.map===2?'蒙奇':'莉亚',z.ending],['蒙奇',`是${z.horse}！把它收好，我们随时可以回广场。`]]);return {ok:true};}
-   s.horses.push(s.map);completeStory(s,n);log(s,'horse_obtain',{map:s.map});return {ok:true,horse:true,message:`${z.horse}已收入手册 · 可自行回广场安装`};
+   if(!s.prepared[n.id]){if(s.map===1&&!s.ingredients)return fail('先沿主路找齐甜点食材');if(s.map===1)s.ingredients=false;setDialog(s,'horse',s.map,n.p,[[s.map===2?'蒙奇':'莉亚',z.ending],['蒙奇',`是${z.horse}！把它收好，我们随时可以回广场。`]]);return {ok:true};}
+   return awardHorse(s,n);
   }
  }
  if(action==='claim'){const r=rewardFor(s,data.id);if(!r||!r.ready)return fail('集齐目标后即可领取');if(s.claims.includes(data.id))return fail('奖励已经领取');reward(s,r.reward);s.claims.push(data.id);log(s,'claim',{id:data.id});return {ok:true,reward:r.reward};}
@@ -54,7 +57,7 @@ export function act(s,action,data={}){
  }
  if(action==='ackBatch'){s.pendingBatch=null;return {ok:true};}
  if(action==='viewToy'){s.newToys=s.newToys.filter(id=>id!==data.id);return {ok:true};}
- if(action==='exchange'){if(expired(s))return fail('活动已到期，停止外部补给');const day=Math.floor((nowOf(s)-s.created)/86400000),used=s.exchanges[day]||0;const c=CONFIG.exchange;if(used>=c.limit)return fail('今日体验兑换次数已用完');if(s.diamonds<c.diamonds)return fail('钻石不足');s.diamonds-=c.diamonds;s.energy+=c.energy;s.exchanges[day]=used+1;log(s,'exchange');return {ok:true,reward:{energy:c.energy}};}
+ if(action==='exchange'){if(expired(s))return fail('活动已到期，停止外部补给');const day=Math.floor((nowOf(s)-s.created)/86400000),used=s.exchanges[day]||0;const c=ENERGY_OFFERS.find(o=>o.id===(data.offer||'large'));if(!c)return fail('兑换档位不可用');if(used>=CONFIG.exchange.limit)return fail('今日体验兑换次数已用完');if(s.diamonds<c.diamonds)return fail('钻石不足');s.diamonds-=c.diamonds;s.energy+=c.energy;s.exchanges[day]=used+1;log(s,'exchange');return {ok:true,reward:{energy:c.energy}};}
  return fail('未识别的操作');
 }
 // Upstream contract: explicit event ID and externally supplied award, no inferred R formula.
