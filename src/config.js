@@ -1,7 +1,7 @@
 // V1.2 §§9,12. All unconfirmed values are review configuration, not production economy.
 export const CONFIG = { days:13, initialEnergy:150, cap:150, regenMs:360000, ticketCost:1, duplicateThreshold:20, multipliers:[1,5,10], orderEnergy:80, exchange:{diamonds:30,energy:100,limit:5}, energyConversion:null, version:'review-v1.2-demo-1' };
 export const ENERGY_OFFERS=[{id:'small',energy:40,diamonds:12},{id:'large',energy:100,diamonds:30}];
-CONFIG.version='review-v1.3-demo-2';
+CONFIG.version='review-v1.4-demo-1';
 export const ZONES = [
  {name:'中央广场',en:'THE DREAM EXPO',short:'广场',horse:'',colors:['#b7d8c8','#eef4d4','#6cad97'],budget:50,side:0,ops:8,chest:30,icon:'carousel'},
  {name:'甜点花园',en:'SUGAR & WONDER',short:'甜点',horse:'糖霜木马',colors:['#bfdfb6','#f1edc4','#84b896'],budget:700,side:100,ops:54,chest:100,icon:'cake',memo:['小围裙','茶杯'],material:['烤炉零件','烤炉把手'],repair:'烤炉',memory:'旧食谱',ending:'原来，我已经实现过一个小时候的愿望。'},
