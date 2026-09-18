@@ -1,7 +1,7 @@
 // V1.2 §§9,12. All unconfirmed values are review configuration, not production economy.
 export const CONFIG = { days:13, initialEnergy:150, cap:150, regenMs:360000, ticketCost:1, duplicateThreshold:20, multipliers:[1,5,10], orderEnergy:80, exchange:{diamonds:30,energy:100,limit:5}, energyConversion:null, version:'review-v1.2-demo-1' };
 export const ENERGY_OFFERS=[{id:'small',energy:40,diamonds:12},{id:'large',energy:100,diamonds:30}];
-CONFIG.version='review-v1.4-demo-1';
+CONFIG.version='review-v1.5-demo-1';
 export const ZONES = [
  {name:'中央广场',en:'THE DREAM EXPO',short:'广场',horse:'',colors:['#b7d8c8','#eef4d4','#6cad97'],budget:50,side:0,ops:8,chest:30,icon:'carousel'},
  {name:'甜点花园',en:'SUGAR & WONDER',short:'甜点',horse:'糖霜木马',colors:['#bfdfb6','#f1edc4','#84b896'],budget:700,side:100,ops:54,chest:100,icon:'cake',memo:['小围裙','茶杯'],material:['烤炉零件','烤炉把手'],repair:'烤炉',memory:'旧食谱',ending:'原来，我已经实现过一个小时候的愿望。'},
@@ -14,7 +14,18 @@ export const QUALITY=['绿','蓝','紫','红','金'];
 ZONES.forEach((z,i)=>{z.repairIcon=['carousel','oven','tracks','theater','gate','scope'][i];});
 const toyNames=['茶杯兔','草莓熊','蘑菇屋','布丁猫','叶子鸟','发条鸭','积木城堡','小火车','锡兵队长','音乐盒','云朵羊','纸皇冠','月亮摇椅','星星木偶','飞行鲸','瓶中船','灯塔','珊瑚鹿','海螺琴','水手兔','星光兔','梦境木马','星球仪','月亮船','蒙奇玩偶'];
 export const TOYS=toyNames.map((name,i)=>({id:i,name,q:Math.floor(i/5),icon:['bunny','bear','mushroom','cat','bird','duck','castle','train','soldier','music','sheep','crown','moon','bunny','whale','bottle','lighthouse','deer','harp','sailor','bunny','horse','planet','boat','monkey'][i]}));
-export const TASKS=[{id:'horses',title:'木马归来',sub:'让五位老朋友重新相聚',total:5,reward:{energy:70,coins:300,mainEnergy:50}}, {id:'repairs',title:'修复展品',sub:'修复后，再收下纪念标记',total:5,reward:{energy:60,coins:200,speed:1}}, {id:'mementos',title:'童年纪念',sub:'沿着岔路，找回十件小小回忆',total:10,reward:{energy:70,diamonds:20,speed:1}}];
+// One entry is one permanent ownership record; scene entries do not remove buildings.
+export const REGION_ITEMS=[[],
+ [['recipe','旧食谱','book',0,'pickup'],['oven-parts','烤炉零件','gear',1,'material',0],['oven','修复烤炉','oven',1,'scene'],['ingredients','食材篮','cake',2,'ingredient'],['dessert','茶桌甜点','cake',2,'scene']],
+ [['design','火车设计图','book',0,'pickup'],['track-parts','轨道','tracks',1,'material',0],['spring','发条','gear',1,'material',1],['tracks','修复轨道','tracks',1,'scene'],['train','小火车','train',2,'scene']],
+ [['program','旧节目单','book',0,'pickup'],['bulbs','灯泡','star',1,'material',0],['curtain','幕布配件','gift',1,'material',1],['stage','修复舞台','theater',1,'scene'],['audience','玩偶观众','bear',2,'scene']],
+ [['paperboat','纸船','boat',0,'pickup'],['route-map','路线图','book',0,'pickup'],['gate-parts','水闸零件','gear',1,'material',0],['gate','修复水闸','gate',1,'scene']],
+ [['star-map','旧星图','book',0,'pickup'],['lens','镜片','planet',1,'material',0],['handle','把手','gear',1,'material',1],['scope','望远镜','scope',1,'scene'],['observatory','星空观景台','star',2,'scene']]
+];
+export const MANUAL_ITEMS=REGION_ITEMS.flatMap((items,map)=>items.map(([id,name,icon,step,kind,slot])=>({id,name,icon,map,step,kind,slot,task:`region-${map}`}))).concat(ZONES.slice(1).map((z,i)=>({id:`horse-${i+1}`,name:z.horse,icon:'horse',map:i+1,step:2,kind:'horse',task:'horses'})));
+export const ITEM_BY_ID=Object.fromEntries(MANUAL_ITEMS.map(i=>[i.id,i]));
+export const TASKS=[...ZONES.slice(1).map((z,i)=>({id:`region-${i+1}`,title:z.name,sub:'拾取道具与场景修复，共同珍藏这段回忆',total:REGION_ITEMS[i+1].length,reward:{energy:20,coins:60},items:MANUAL_ITEMS.filter(o=>o.map===i+1&&o.kind!=='horse')})),{id:'horses',title:'木马归来',sub:'获得即入册，回广场自动安装',total:5,reward:{energy:70,coins:300,mainEnergy:50},items:MANUAL_ITEMS.filter(o=>o.kind==='horse')}];
+export const MANUAL_REWARD={energy:30,diamonds:20,speed:2};
 export const STORY_REWARD={coins:1000,diamonds:50,mainEnergy:100,generator:1};
 export const COLLECTION_REWARD={energy:100,diamonds:30,generator:1};
 export const CATEGORY_REWARD={energy:20,coins:100};
@@ -50,6 +61,33 @@ function createMap(z,zi){
  return {nodes,branches,height:Math.max(1450,row*94+430)};
 }
 export const MAPS=ZONES.map(createMap);
+// Keep legacy node ids for saved obstacle progress; insert the new fixed pickups.
+MAPS.forEach((map,zi)=>{
+ if(!zi)return;
+ const out=[];
+ for(const n of map.nodes){
+  if(n.type==='material'){
+   const item=MANUAL_ITEMS.find(i=>i.map===zi&&i.kind==='material'&&i.slot===n.material);
+   if(!item)continue;
+   n.item=item.id;n.name=item.name;n.icon=item.icon;
+  }
+  if(n.type==='ingredient'){n.item='ingredients';n.name='食材篮';}
+  if(n.type==='story'){
+   if(n.step===0)for(const item of MANUAL_ITEMS.filter(i=>i.map===zi&&i.kind==='pickup'))out.push({id:`item-${item.id}`,map:zi,type:'pickup',name:item.name,icon:item.icon,item:item.id});
+   n.auto=true;n.sceneItems=MANUAL_ITEMS.filter(i=>i.map===zi&&i.kind==='scene'&&i.step===n.step).map(i=>i.id);
+   if(n.step===2)n.name=['','茶桌上的童年心愿','小火车的终点','为童年拉开幕布','纸船启航','一起看星星'][zi];
+  }
+  out.push(n);
+ }
+ let prev=null,row=0,last=null;
+ for(const n of out){
+  if(n.type==='chest'){n.x=last.x+(n.kind==='energy'?-67:67);n.y=last.y+73;continue;}
+  n.prev=prev;n.x=225+Math.sin(row*.76)*105;n.y=220+row*108;prev=n.id;last=n;row++;
+ }
+ map.nodes=out;map.height=Math.max(1450,row*108+430);
+ for(const branch of map.branches){const n=branch.at(-1);n.type='supply';n.name='小径资源箱';n.icon='chest';n.reward={coins:30+zi*10,tickets:3};}
+});
+for(const item of MANUAL_ITEMS){const map=MAPS[item.map];item.nodeId=map.nodes.find(n=>n.item===item.id)?.id||map.nodes.find(n=>n.type==='story'&&n.step===item.step).id;}
 export const allNodes=()=>MAPS.flatMap(m=>[...m.nodes,...m.branches.flat()]);
 export const NODE_BY_ID=Object.fromEntries(allNodes().map(n=>[n.id,n]));
 // Logical path order remains stable for existing saves. Display coordinates run upward.
