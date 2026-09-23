@@ -1,7 +1,8 @@
-// V1.2 §§9,12. All unconfirmed values are review configuration, not production economy.
-export const CONFIG = { days:13, initialEnergy:150, cap:150, regenMs:360000, ticketCost:1, duplicateThreshold:20, multipliers:[1,5,10], orderEnergy:80, exchange:{diamonds:30,energy:100,limit:5}, energyConversion:null, version:'review-v1.2-demo-1' };
+// Final planning document (2026-09-23), §§9.1–9.11. Numeric amounts remain review configuration.
+export const CONFIG = { days:9, initialEnergy:150, cap:150, regenMs:360000, ticketCost:1, duplicateEnergy:[5,8,12,18,25], ticketDrops:[1,1,2,2,3], multipliers:[1,3,5,10], orderEnergy:80, exchange:{diamonds:30,energy:100,limit:5}, settlementDays:2, resetHour:3, timezoneOffset:8, version:'review-v1.6-demo-1' };
 export const ENERGY_OFFERS=[{id:'small',energy:40,diamonds:12},{id:'large',energy:100,diamonds:30}];
-CONFIG.version='review-v1.5-demo-1';
+export const COMMERCIAL={offers:[],lastDays:3};
+export const LOOP={branch:2,costs:[[20,25],[30],[35,25],[40],[30]],reward:{energy:20,coins:60}};
 export const ZONES = [
  {name:'中央广场',en:'THE DREAM EXPO',short:'广场',horse:'',colors:['#b7d8c8','#eef4d4','#6cad97'],budget:50,side:0,ops:8,chest:30,icon:'carousel'},
  {name:'甜点花园',en:'SUGAR & WONDER',short:'甜点',horse:'糖霜木马',colors:['#bfdfb6','#f1edc4','#84b896'],budget:700,side:100,ops:54,chest:100,icon:'cake',memo:['小围裙','茶杯'],material:['烤炉零件','烤炉把手'],repair:'烤炉',memory:'旧食谱',ending:'原来，我已经实现过一个小时候的愿望。'},
@@ -22,12 +23,15 @@ export const REGION_ITEMS=[[],
  [['paperboat','纸船','boat',0,'pickup'],['route-map','路线图','book',0,'pickup'],['gate-parts','水闸零件','gear',1,'material',0],['gate','修复水闸','gate',1,'scene']],
  [['star-map','旧星图','book',0,'pickup'],['lens','镜片','planet',1,'material',0],['handle','把手','gear',1,'material',1],['scope','望远镜','scope',1,'scene'],['observatory','星空观景台','star',2,'scene']]
 ];
-export const MANUAL_ITEMS=REGION_ITEMS.flatMap((items,map)=>items.map(([id,name,icon,step,kind,slot])=>({id,name,icon,map,step,kind,slot,task:`region-${map}`}))).concat(ZONES.slice(1).map((z,i)=>({id:`horse-${i+1}`,name:z.horse,icon:'horse',map:i+1,step:2,kind:'horse',task:'horses'})));
-export const ITEM_BY_ID=Object.fromEntries(MANUAL_ITEMS.map(i=>[i.id,i]));
-export const TASKS=[...ZONES.slice(1).map((z,i)=>({id:`region-${i+1}`,title:z.name,sub:'拾取道具与场景修复，共同珍藏这段回忆',total:REGION_ITEMS[i+1].length,reward:{energy:20,coins:60},items:MANUAL_ITEMS.filter(o=>o.map===i+1&&o.kind!=='horse')})),{id:'horses',title:'木马归来',sub:'获得即入册，回广场自动安装',total:5,reward:{energy:70,coins:300,mainEnergy:50},items:MANUAL_ITEMS.filter(o=>o.kind==='horse')}];
-export const MANUAL_REWARD={energy:30,diamonds:20,speed:2};
-export const STORY_REWARD={coins:1000,diamonds:50,mainEnergy:100,generator:1};
-export const COLLECTION_REWARD={energy:100,diamonds:30,generator:1};
+export const STORY_ITEMS=REGION_ITEMS.flatMap((items,map)=>items.map(([id,name,icon,step,kind,slot])=>({id,name,icon,map,step,kind,slot,task:`region-${map}`}))).concat(ZONES.slice(1).map((z,i)=>({id:`horse-${i+1}`,name:z.horse,icon:'horse',map:i+1,step:2,kind:'horse',task:'horses'})));
+// §9.4: three representative items per region; exact art names remain review choices.
+export const MANUAL_ITEMS=STORY_ITEMS.filter(i=>!['material','ingredient'].includes(i.kind));
+export const ITEM_BY_ID=Object.fromEntries(STORY_ITEMS.map(i=>[i.id,i]));
+export const TASKS=[...ZONES.slice(1).map((z,i)=>({id:`region-${i+1}`,title:z.name,sub:'拾取道具与场景修复，共同珍藏这段回忆',total:3,reward:{energy:20,coins:60},items:MANUAL_ITEMS.filter(o=>o.map===i+1&&o.kind!=='horse')})),{id:'horses',title:'木马归来',sub:'获得即入册，回广场自动安装',total:5,reward:{energy:70,coins:300,mainEnergy:50},items:MANUAL_ITEMS.filter(o=>o.kind==='horse')}];
+TASKS.unshift(TASKS.pop());
+export const MANUAL_REWARD={wild:1};
+export const STORY_REWARD={mainEnergy:300,mergeGem:3,starPack:1};
+export const COLLECTION_REWARD={wild:1,generator:1};
 export const CATEGORY_REWARD={energy:20,coins:100};
 const allocate=(sum,n)=>{const weights=Array.from({length:n},(_,i)=>[0.7,1,0.85,1.3,1.15][i%5]); const w=weights.reduce((a,b)=>a+b,0); const a=weights.map(x=>Math.floor(sum*x/w)); for(let i=0,rem=sum-a.reduce((s,v)=>s+v,0);i<rem;i++)a[i%n]++;return a;};
 function createMap(z,zi){
@@ -67,14 +71,14 @@ MAPS.forEach((map,zi)=>{
  const out=[];
  for(const n of map.nodes){
   if(n.type==='material'){
-   const item=MANUAL_ITEMS.find(i=>i.map===zi&&i.kind==='material'&&i.slot===n.material);
+   const item=STORY_ITEMS.find(i=>i.map===zi&&i.kind==='material'&&i.slot===n.material);
    if(!item)continue;
    n.item=item.id;n.name=item.name;n.icon=item.icon;
   }
   if(n.type==='ingredient'){n.item='ingredients';n.name='食材篮';}
   if(n.type==='story'){
-   if(n.step===0)for(const item of MANUAL_ITEMS.filter(i=>i.map===zi&&i.kind==='pickup'))out.push({id:`item-${item.id}`,map:zi,type:'pickup',name:item.name,icon:item.icon,item:item.id});
-   n.auto=true;n.sceneItems=MANUAL_ITEMS.filter(i=>i.map===zi&&i.kind==='scene'&&i.step===n.step).map(i=>i.id);
+   if(n.step===0)for(const item of STORY_ITEMS.filter(i=>i.map===zi&&i.kind==='pickup'))out.push({id:`item-${item.id}`,map:zi,type:'pickup',name:item.name,icon:item.icon,item:item.id});
+   n.auto=n.step===0;n.collectAfter=zi===2&&n.step===1;n.sceneItems=STORY_ITEMS.filter(i=>i.map===zi&&i.kind==='scene'&&i.step===n.step).map(i=>i.id);
    if(n.step===2)n.name=['','茶桌上的童年心愿','小火车的终点','为童年拉开幕布','纸船启航','一起看星星'][zi];
   }
   out.push(n);
@@ -87,15 +91,22 @@ MAPS.forEach((map,zi)=>{
  map.nodes=out;map.height=Math.max(1450,row*108+430);
  for(const branch of map.branches){const n=branch.at(-1);n.type='supply';n.name='小径资源箱';n.icon='chest';n.reward={coins:30+zi*10,tickets:3};}
 });
-for(const item of MANUAL_ITEMS){const map=MAPS[item.map];item.nodeId=map.nodes.find(n=>n.item===item.id)?.id||map.nodes.find(n=>n.type==='story'&&n.step===item.step).id;}
+for(const item of STORY_ITEMS){const map=MAPS[item.map];item.nodeId=map.nodes.find(n=>n.item===item.id)?.id||map.nodes.find(n=>n.type==='story'&&n.step===item.step).id;}
+const loopNodes=LOOP.costs.map((segments,i)=>({id:`loop-5-${i}`,map:5,branch:LOOP.branch,type:'obstacle',prev:i?`loop-5-${i-1}`:null,segments,name:'星光小径障碍',icon:['bush','rock','crate'][i%3],x:170+(i%2)*100,y:170+i*110}));
+loopNodes.push({id:'loop-5-reward',map:5,branch:LOOP.branch,type:'supply',prev:loopNodes.at(-1).id,name:'星光循环宝箱',icon:'chest',reward:LOOP.reward,x:225,y:170+loopNodes.length*110,repeat:true});
+MAPS[5].branches.push(loopNodes);
 export const allNodes=()=>MAPS.flatMap(m=>[...m.nodes,...m.branches.flat()]);
 export const NODE_BY_ID=Object.fromEntries(allNodes().map(n=>[n.id,n]));
 // Logical path order remains stable for existing saves. Display coordinates run upward.
 export function mapHeight(map,branch=null){return branch===null?(map===0?1930:MAPS[map].height):Math.max(900,MAPS[map].branches[branch].at(-1).y+270);}
 export function sceneY(node,map=node.map,branch=node.branch??null){if(node.p===17)return 790;return mapHeight(map,branch)-node.y;}
-// Review sequence: 25 first discoveries distributed over 120 items, last first at 120.
+// Reuse the previous trial reward quantities to populate four pools; runtime shuffles each room.
 export const FIRST_POSITIONS=[1,3,6,9,12,16,20,24,28,32,37,42,47,52,57,63,69,75,81,87,94,101,108,114,120];
 export const SEQUENCE=Array.from({length:120},(_,i)=>{const pos=i+1; const first=FIRST_POSITIONS.indexOf(pos);if(first>=0)return {type:'toy',id:first};if(pos%4===0)return {type:'energy',amount:40};if(pos%7===0)return {type:'coins',amount:30};if(pos%13===0)return {type:'speed',amount:1};return {type:'toy',id:(pos*7)%Math.max(1,FIRST_POSITIONS.filter(p=>p<pos).length)};});
 const energyEntries=SEQUENCE.filter(r=>r.type==='energy');
 energyEntries.forEach((r,i)=>{r.amount=Math.floor(800/energyEntries.length)+(i<800%energyEntries.length?1:0);});
 export const TAIL=[{type:'energy',amount:20},{type:'coins',amount:30},{type:'toy',id:2},{type:'mainEnergy',amount:10},{type:'toy',id:8},{type:'speed',amount:1},{type:'toy',id:12},{type:'energy',amount:20}];
+
+// §9.5.3: review pools; random without replacement inside each room, sequential rooms.
+export const GACHA_ROOMS=Array.from({length:4},(_,i)=>SEQUENCE.slice(i*30,i*30+30));
+export const GACHA_TAIL=Array.from({length:30},(_,i)=>({...TAIL[i%TAIL.length]}));
